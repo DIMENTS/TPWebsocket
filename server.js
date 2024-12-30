@@ -1,84 +1,54 @@
 const WebSocket = require('ws');
 
-const wss = new WebSocket.Server({ port: 8083 });
+const wss = new WebSocket.Server({ port: process.env.PORT || 8080 }); // Use environment port or 8080
+const grid = {};
+const userCooldowns = {};
 
-const grid = {}; // Opslaan van grid-staat { 'x,y': '#FFFFFF' }
-const userCooldowns = {}; // Bijhouden van cooldown per gebruiker
-const activeUsers = {}; // Bijhouden van muisbewegingen per gebruiker
+wss.on('connection', (ws) => {
+    console.log('Client connected');
 
-wss.on('connection', (socket) => {
-  console.log('Nieuwe gebruiker verbonden.');
+    // Send initial grid data
+    ws.send(JSON.stringify({ type: 'init', grid }));
 
-  // Stuur huidige grid en actieve gebruikers naar nieuwe gebruiker
-  socket.send(JSON.stringify({ type: 'init', grid, activeUsers }));
+    ws.on('message', (message) => {
+        try {
+            const data = JSON.parse(message);
 
-  socket.on('message', (message) => {
-    try {
-      const data = JSON.parse(message);
+            if (data.type === 'place_pixel') {
+                const now = Date.now();
+                if (userCooldowns[data.userId] && now - userCooldowns[data.userId] < 30000) {
+                    return ws.send(JSON.stringify({ type: 'error', message: 'Cooldown active' }));
+                }
 
-      // Pixel plaatsen
-      if (data.type === 'place_pixel') {
-        const now = Date.now();
+                userCooldowns[data.userId] = now;
+                grid[`${data.x},${data.y}`] = data.color;
 
-        // Controleer cooldown
-        if (userCooldowns[data.userId] && now - userCooldowns[data.userId] < 30000) {
-          socket.send(JSON.stringify({ type: 'error', message: 'Cooldown actief. Wacht 30 seconden.' }));
-          return;
+                wss.clients.forEach((client) => {
+                    if (client !== ws && client.readyState === WebSocket.OPEN) { // Prevent sending to self and closed connections
+                        client.send(JSON.stringify({ type: 'update_pixel', x: data.x, y: data.y, color: data.color }));
+                    }
+                });
+            }
+            if (data.type === 'mouse_move') {
+                wss.clients.forEach((client) => {
+                    if (client !== ws && client.readyState === WebSocket.OPEN) {
+                        client.send(JSON.stringify({ type: 'mouse_move', userId: data.userId, x: data.x, y: data.y }));
+                    }
+                });
+            }
+        } catch (error) {
+            console.error('Error processing message:', error);
+            ws.send(JSON.stringify({ type: 'error', message: 'Invalid message format' }));
         }
-
-        // Update cooldown en grid
-        userCooldowns[data.userId] = now;
-        const { x, y, color } = data;
-        grid[`${x},${y}`] = color;
-
-        // Stuur update naar alle clients
-        wss.clients.forEach((client) => {
-          if (client.readyState === WebSocket.OPEN) {
-            client.send(JSON.stringify({ type: 'update_pixel', x, y, color }));
-          }
-        });
-      }
-
-      // Muisbeweging bijwerken
-      if (data.type === 'move_mouse') {
-        const { userId, x, y } = data;
-        activeUsers[userId] = { x, y };
-
-        // Stuur muisbewegingen naar alle clients
-        wss.clients.forEach((client) => {
-          if (client.readyState === WebSocket.OPEN) {
-            client.send(JSON.stringify({
-              type: 'mouse_move',
-              userId,
-              x,
-              y
-            }));
-          }
-        });
-      }
-    } catch (err) {
-      console.error('Fout bij verwerken bericht:', err);
-    }
-  });
-
-  socket.on('close', () => {
-    console.log('Verbinding gesloten.');
-
-    // Verwijder de gebruiker uit actieve gebruikers
-    for (const [userId, user] of Object.entries(activeUsers)) {
-      if (user.socket === socket) {
-        delete activeUsers[userId];
-        break;
-      }
-    }
-
-    // Optioneel: Stuur een update naar alle clients dat de gebruiker is vertrokken
-    wss.clients.forEach((client) => {
-      if (client.readyState === WebSocket.OPEN) {
-        client.send(JSON.stringify({ type: 'user_disconnected', userId }));
-      }
     });
-  });
+
+    ws.on('close', () => {
+        console.log('Client disconnected');
+    });
+
+    ws.on('error', (error) => {
+        console.error('WebSocket error:', error);
+    });
 });
 
-console.log('WebSocket-server draait');
+console.log('WebSocket server started');

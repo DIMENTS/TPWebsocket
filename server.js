@@ -1,10 +1,39 @@
 const WebSocket = require('ws');
+const sqlite3 = require('sqlite3').verbose();
 
 const wss = new WebSocket.Server({ port: process.env.PORT || 8080 });
-const grid = {};
 const userCooldowns = {};
 const activeUsers = new Set(); // Houd actieve gebruikers bij
 
+// Verbinden met de SQLite-database
+const db = new sqlite3.Database('./grid.db');
+
+// Maak de database-tabel als die nog niet bestaat
+db.serialize(() => {
+    db.run(`CREATE TABLE IF NOT EXISTS pixels (
+        x INTEGER,
+        y INTEGER,
+        color TEXT,
+        PRIMARY KEY (x, y)
+    )`);
+});
+
+// Grid inladen vanuit de database
+const grid = {};
+db.serialize(() => {
+    db.all('SELECT * FROM pixels', [], (err, rows) => {
+        if (err) {
+            console.error('Error loading grid from database:', err);
+            return;
+        }
+        rows.forEach(row => {
+            grid[`${row.x},${row.y}`] = row.color;
+        });
+        console.log('Grid geladen vanuit database');
+    });
+});
+
+// WebSocket server functionaliteit
 wss.on('connection', (ws) => {
     console.log('Client connected');
 
@@ -22,7 +51,7 @@ wss.on('connection', (ws) => {
                     return ws.close();
                 }
                 activeUsers.add(userId);
-                ws.send(JSON.stringify({ type: 'init', grid }));
+                ws.send(JSON.stringify({ type: 'init', grid })); // Stuur het geladen grid naar de client
             }
 
             if (data.type === 'place_pixel') {
@@ -38,6 +67,18 @@ wss.on('connection', (ws) => {
                 userCooldowns[userId] = now;
                 grid[`${data.x},${data.y}`] = data.color;
 
+                // Sla de wijziging op in de database
+                db.run(
+                    'INSERT OR REPLACE INTO pixels (x, y, color) VALUES (?, ?, ?)',
+                    [data.x, data.y, data.color],
+                    (err) => {
+                        if (err) {
+                            console.error('Error saving pixel to database:', err);
+                        }
+                    }
+                );
+
+                // Broadcast de wijziging naar alle clients
                 wss.clients.forEach((client) => {
                     if (client.readyState === WebSocket.OPEN) {
                         client.send(JSON.stringify({ type: 'update_pixel', x: data.x, y: data.y, color: data.color }));

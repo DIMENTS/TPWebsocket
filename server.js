@@ -1,32 +1,16 @@
-const fs = require('fs');
 const WebSocket = require('ws');
 
 const wss = new WebSocket.Server({ port: process.env.PORT || 8080 });
-const gridFile = './grid.json';
-let grid = {};
-
-// Laad de grid bij serverstart
-if (fs.existsSync(gridFile)) {
-    try {
-        grid = JSON.parse(fs.readFileSync(gridFile, 'utf8'));
-        console.log('Grid loaded from file.');
-    } catch (error) {
-        console.error('Error loading grid:', error);
-    }
-}
-
-// Sla de grid op bij wijzigingen
-function saveGrid() {
-    fs.writeFileSync(gridFile, JSON.stringify(grid, null, 2));
-}
-
+const grid = {};
 const userCooldowns = {};
-const activeUsers = new Set();
+const activeUsers = new Set(); // Houd actieve gebruikers bij
 
 wss.on('connection', (ws) => {
     console.log('Client connected');
-    let userId;
 
+    let userId; // Unieke gebruiker-ID
+
+    // Verwerk berichten van de client
     ws.on('message', (message) => {
         try {
             const data = JSON.parse(message);
@@ -53,7 +37,6 @@ wss.on('connection', (ws) => {
 
                 userCooldowns[userId] = now;
                 grid[`${data.x},${data.y}`] = data.color;
-                saveGrid(); // Sla de grid op na elke wijziging
 
                 wss.clients.forEach((client) => {
                     if (client.readyState === WebSocket.OPEN) {
@@ -77,7 +60,7 @@ wss.on('connection', (ws) => {
 
     ws.on('close', () => {
         console.log('Client disconnected');
-        activeUsers.delete(userId);
+        activeUsers.delete(userId); // Verwijder de gebruiker bij disconnect
     });
 
     ws.on('error', (error) => {

@@ -3,8 +3,7 @@
   "version": "1.0.0",
   "main": "server.js",
   "scripts": {
-    "start": "node server.js",
-    "postinstall": "npm install sqlite3"
+    "start": "node server.js"
   },
   "dependencies": {
     "sqlite3": "^5.1.6",

@@ -3,10 +3,9 @@
   "version": "1.0.0",
   "main": "server.js",
   "scripts": {
-    "start": "npm install && node server.js"
+    "start": "node server.js"
   },
   "dependencies": {
-    "sqlite3": "^5.1.6",
     "ws": "^8.18.0"
   }
 }

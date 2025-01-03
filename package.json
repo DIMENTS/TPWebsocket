@@ -1,13 +1,19 @@
 {
-  "name": "websocket-server",
+  "name": "websocket-pixel-server",
   "version": "1.0.0",
+  "description": "WebSocket server for pixel grid project",
   "main": "server.js",
   "scripts": {
-    "start": "node server.js",
-    "postinstall": "npm install"
+    "start": "node server.js"
   },
   "dependencies": {
-    "better-sqlite3": "^8.0.0",
-    "ws": "^8.18.0"
-  }
+    "better-sqlite3": "^8.0.0",  // Ensure you use the latest compatible version
+    "ws": "^8.13.0"              // Latest stable WebSocket library version
+  },
+  "engines": {
+    "node": ">=14.x"             // Ensure compatibility with Railway's Node.js environment
+  },
+  "keywords": [],
+  "author": "",
+  "license": "MIT"
 }

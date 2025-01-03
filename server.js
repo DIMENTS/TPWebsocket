@@ -1,13 +1,58 @@
 const WebSocket = require('ws');
+const sqlite3 = require('sqlite3').verbose();
+
+// Maak verbinding met de SQLite-database
+const db = new sqlite3.Database(process.env.DATABASE_URL || 'grid.db', (err) => {
+    if (err) {
+        console.error('Error connecting to SQLite:', err.message);
+    } else {
+        console.log('Connected to SQLite database');
+    }
+});
+
+// Tabel aanmaken als die nog niet bestaat
+db.run(`
+  CREATE TABLE IF NOT EXISTS grid (
+    x INTEGER NOT NULL,
+    y INTEGER NOT NULL,
+    color TEXT NOT NULL,
+    PRIMARY KEY (x, y)
+  )
+`);
 
 const wss = new WebSocket.Server({ port: process.env.PORT || 8080 });
-const grid = {};
 const userCooldowns = {};
 const activeUsers = new Set(); // Houd actieve gebruikers bij
 
+// Functie om een pixel op te slaan in de database
+function savePixel(x, y, color) {
+    const query = `INSERT OR REPLACE INTO grid (x, y, color) VALUES (?, ?, ?)`;
+    db.run(query, [x, y, color], (err) => {
+        if (err) {
+            console.error('Error saving pixel:', err.message);
+        }
+    });
+}
+
+// Functie om het grid op te halen uit de database
+function loadGrid(callback) {
+    const query = `SELECT * FROM grid`;
+    db.all(query, [], (err, rows) => {
+        if (err) {
+            console.error('Error loading grid:', err.message);
+        } else {
+            const gridData = {};
+            rows.forEach((row) => {
+                gridData[`${row.x},${row.y}`] = row.color;
+            });
+            callback(gridData);
+        }
+    });
+}
+
+// WebSocket-logica
 wss.on('connection', (ws) => {
     console.log('Client connected');
-
     let userId; // Unieke gebruiker-ID
 
     // Verwerk berichten van de client
@@ -22,7 +67,11 @@ wss.on('connection', (ws) => {
                     return ws.close();
                 }
                 activeUsers.add(userId);
-                ws.send(JSON.stringify({ type: 'init', grid }));
+
+                // Stuur het grid naar de gebruiker bij initialisatie
+                loadGrid((gridData) => {
+                    ws.send(JSON.stringify({ type: 'init', grid: gridData }));
+                });
             }
 
             if (data.type === 'place_pixel') {
@@ -36,7 +85,7 @@ wss.on('connection', (ws) => {
                 }
 
                 userCooldowns[userId] = now;
-                grid[`${data.x},${data.y}`] = data.color;
+                savePixel(data.x, data.y, data.color); // Sla de pixel op in de database
 
                 wss.clients.forEach((client) => {
                     if (client.readyState === WebSocket.OPEN) {

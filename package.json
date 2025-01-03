@@ -7,7 +7,7 @@
     "postinstall": "npm install"
   },
   "dependencies": {
-    "sqlite3": "^5.1.6",
+    "better-sqlite3": "^8.0.0",
     "ws": "^8.18.0"
   }
 }

@@ -2,15 +2,6 @@ const WebSocket = require('ws');
 
 const wss = new WebSocket.Server({ port: process.env.PORT || 8080 });
 const grid = {};
-const userCooldowns = {};
-const connectedUsers = new Set();
-const userRequests = {};
-const MAX_REQUESTS_PER_MINUTE = 5;
-
-const WebSocket = require('ws');
-
-const wss = new WebSocket.Server({ port: process.env.PORT || 8080 });
-const grid = {};
 const userCooldowns = {}; // Slaat nu timestamps op
 const connectedUsers = new Set();
 const userRequests = {};

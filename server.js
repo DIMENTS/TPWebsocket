@@ -3,10 +3,12 @@ const WebSocket = require('ws');
 const wss = new WebSocket.Server({ port: process.env.PORT || 8080 });
 const grid = {};
 const userCooldowns = {};
+const connectedUsers = new Set();
 const userRequests = {}; // Nieuw object voor rate limiting
 const MAX_REQUESTS_PER_MINUTE = 5; // Bijvoorbeeld 5 verzoeken per minuut
 
 wss.on('connection', (ws) => {
+    connectedUsers.add(ws);
     console.log('Client connected');
 
     ws.send(JSON.stringify({ type: 'init', grid }));
@@ -14,6 +16,14 @@ wss.on('connection', (ws) => {
     ws.on('message', (message) => {
         try {
             const data = JSON.parse(message);
+
+            if (data.type === 'mouse_move') {
+                wss.clients.forEach((client) => {
+                    if (client !== ws && client.readyState === WebSocket.OPEN) {
+                        client.send(JSON.stringify(data)); // Stuur het bericht door naar alle andere clients
+                    }
+                });
+            }
 
             if (data.type === 'place_pixel') {
                 const now = Date.now();
@@ -50,13 +60,6 @@ wss.on('connection', (ws) => {
                 });
             }
 
-                        if (data.type === 'mouse_move') {
-                                wss.clients.forEach((client) => {
-                                        if (client !== ws && client.readyState === WebSocket.OPEN) {
-                                                client.send(JSON.stringify({ type: 'mouse_move', userId: data.userId, x: data.x, y: data.y }));
-                                        }
-                                });
-                        }
         } catch (error) {
             console.error('Error processing message:', error);
             ws.send(JSON.stringify({ type: 'error', message: 'Invalid message format' }));
@@ -65,7 +68,20 @@ wss.on('connection', (ws) => {
 
     ws.on('close', () => {
         console.log('Client disconnected');
+        connectedUsers.delete(ws);
+        // Stuur een bericht naar alle andere clients dat deze gebruiker is disconnected
+        wss.clients.forEach((client) => {
+            if (client.readyState === WebSocket.OPEN) {
+                client.send(JSON.stringify({ type: 'user_disconnected', userId: ws.userId }));
+            }
+        });
     });
+
+    ws.on('error', (error) => {
+        console.error('WebSocket error:', error);
+        connectedUsers.delete(ws);
+    });
+});
 
     ws.on('error', (error) => {
         console.error('WebSocket error:', error);

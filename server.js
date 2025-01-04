@@ -19,6 +19,16 @@ wss.on('connection', (ws) => {
       const data = JSON.parse(message);
 
       switch (data.type) {
+
+          case 'update_pixel':
+  grid[`${data.x},${data.y}`] = data.color;
+  wss.clients.forEach((client) => {
+    if (client !== ws && client.readyState === WebSocket.OPEN) {
+      client.send(JSON.stringify({ type: 'update_pixel', x: data.x, y: data.y, color: data.color }));
+    }
+  });
+  break;
+
         case 'mouse_move':
           // Broadcast mouse movement to all connected clients (excluding sender)
           wss.clients.forEach((client) => {
@@ -29,34 +39,34 @@ wss.on('connection', (ws) => {
           break;
 
         case 'place_pixel':
-        const now = Date.now();
+          const now = Date.now();
 
-        if (userCooldowns[ws] && now < userCooldowns[ws]) {
-            const remainingCooldown = Math.ceil((userCooldowns[ws] - now) / 1000);
-            return ws.send(JSON.stringify({ type: 'cooldown', remaining: remainingCooldown }));
-        }
+          if (userCooldowns[ws] && now < userCooldowns[ws]) {
+              const remainingCooldown = Math.ceil((userCooldowns[ws] - now) / 1000);
+              return ws.send(JSON.stringify({ type: 'cooldown', remaining: remainingCooldown }));
+          }
 
-        if (!userRequests[ws]) {
-            userRequests[ws] = { count: 0, lastRequestTime: 0 };
-        }
+          if (!userRequests[ws]) {
+              userRequests[ws] = { count: 0, lastRequestTime: 0 };
+          }
 
-        if (now - userRequests[ws].lastRequestTime < 60000) {
-            if (userRequests[ws].count >= MAX_REQUESTS_PER_MINUTE) {
-                return ws.send(JSON.stringify({ type: 'error', message: 'Te veel verzoeken. Probeer het later opnieuw.' }));
-            }
-            userRequests[ws].count++;
-        } else {
-            userRequests[ws].count = 1;
-        }
-        userRequests[ws].lastRequestTime = now;
+          if (now - userRequests[ws].lastRequestTime < 60000) {
+              if (userRequests[ws].count >= MAX_REQUESTS_PER_MINUTE) {
+                  return ws.send(JSON.stringify({ type: 'error', message: 'Te veel verzoeken. Probeer het later opnieuw.' }));
+              }
+              userRequests[ws].count++;
+          } else {
+              userRequests[ws].count = 1;
+          }
+          userRequests[ws].lastRequestTime = now;
 
-        grid[`${data.x},${data.y}`] = data.color;
-        wss.clients.forEach((client) => {
-            if (client !== ws && client.readyState === WebSocket.OPEN) {
-                client.send(JSON.stringify({ type: 'update_pixel', x: data.x, y: data.y, color: data.color }));
-            }
-        });
-        break;
+          grid[`${data.x},${data.y}`] = data.color;
+          wss.clients.forEach((client) => {
+              if (client !== ws && client.readyState === WebSocket.OPEN) {
+                  client.send(JSON.stringify({ type: 'update_pixel', x: data.x, y: data.y, color: data.color }));
+               }
+          });
+          break;
 
 
         default:

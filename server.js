@@ -29,38 +29,35 @@ wss.on('connection', (ws) => {
           break;
 
         case 'place_pixel':
-          const now = Date.now();
+        const now = Date.now();
 
-          // Check for cooldown
-          if (userCooldowns[ws] && now < userCooldowns[ws]) {
+        if (userCooldowns[ws] && now < userCooldowns[ws]) {
             const remainingCooldown = Math.ceil((userCooldowns[ws] - now) / 1000);
             return ws.send(JSON.stringify({ type: 'cooldown', remaining: remainingCooldown }));
-          }
+        }
 
-          // Check for request limit per minute
-          if (!userRequests[ws]) {
+        if (!userRequests[ws]) {
             userRequests[ws] = { count: 0, lastRequestTime: 0 };
-          }
+        }
 
-          if (now - userRequests[ws].lastRequestTime < 60000) {
+        if (now - userRequests[ws].lastRequestTime < 60000) {
             if (userRequests[ws].count >= MAX_REQUESTS_PER_MINUTE) {
-              return ws.send(JSON.stringify({ type: 'error', message: 'Te veel verzoeken. Probeer het later opnieuw.' }));
+                return ws.send(JSON.stringify({ type: 'error', message: 'Te veel verzoeken. Probeer het later opnieuw.' }));
             }
             userRequests[ws].count++;
-          } else {
+        } else {
             userRequests[ws].count = 1;
-          }
-          userRequests[ws].lastRequestTime = now;
+        }
+        userRequests[ws].lastRequestTime = now;
 
-          // Update grid, set cooldown, and broadcast update
-          userCooldowns[ws] = now + 30000; // Set cooldown for 30 seconds
-          grid[`${data.x},${data.y}`] = data.color;
-          wss.clients.forEach((client) => {
+        grid[`${data.x},${data.y}`] = data.color;
+        wss.clients.forEach((client) => {
             if (client !== ws && client.readyState === WebSocket.OPEN) {
-              client.send(JSON.stringify({ type: 'update_pixel', x: data.x, y: data.y, color: data.color }));
+                client.send(JSON.stringify({ type: 'update_pixel', x: data.x, y: data.y, color: data.color }));
             }
-          });
-          break;
+        });
+        break;
+
 
         default:
           console.warn(`Unknown message type: ${data.type}`);

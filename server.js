@@ -7,29 +7,38 @@ const connectedUsers = new Set();
 const userRequests = {};
 const MAX_REQUESTS_PER_MINUTE = 5;
 
-wss.on('connection', (ws) => {
+const WebSocket = require('ws');
+
+const wss = new WebSocket.Server({ port: process.env.PORT || 8080 });
+const grid = {};
+const userCooldowns = {}; // Slaat nu timestamps op
+const connectedUsers = new Set();
+const userRequests = {};
+const MAX_REQUESTS_PER_MINUTE = 5;
+
+wss.on('connection', (ws, req) => {
     connectedUsers.add(ws);
     console.log('Client connected');
 
     ws.send(JSON.stringify({ type: 'init', grid }));
 
-        ws.on('message', (message) => {
+    ws.on('message', (message) => {
         try {
-          const data = JSON.parse(message);
+            const data = JSON.parse(message);
+            const userId = req.session.id; // Gebruik sessie-ID voor cooldowns
 
-          if (data.type === 'mouse_move') {
-            // Stuur de data (inclusief de percentages x en y) naar alle *andere* clients
-            wss.clients.forEach((client) => {
-              if (client !== ws && client.readyState === WebSocket.OPEN) {
-                client.send(JSON.stringify(data));
-              }
+            if (data.type === 'mouse_move') {
+                wss.clients.forEach((client) => {
+                    if (client !== ws && client.readyState === WebSocket.OPEN) {
+                        client.send(JSON.stringify(data));
+                    }
                 });
-                  } else if (data.type === 'place_pixel') {
+            } else if (data.type === 'place_pixel') {
                 const now = Date.now();
-                const userId = data.userId;
 
-                if (userCooldowns[userId] && now - userCooldowns[userId] < 30000) {
-                    return ws.send(JSON.stringify({ type: 'error', message: 'Cooldown active' }));
+                if (userCooldowns[userId] && now < userCooldowns[userId]) {
+                    const remainingCooldown = Math.ceil((userCooldowns[userId] - now) / 1000); // Bereken resterende cooldown
+                    return ws.send(JSON.stringify({ type: 'cooldown', remaining: remainingCooldown })); // Stuur cooldown bericht
                 }
 
                 if (!userRequests[userId]) {
@@ -45,7 +54,8 @@ wss.on('connection', (ws) => {
                     userRequests[userId].count = 1;
                 }
                 userRequests[userId].lastRequestTime = now;
-                userCooldowns[userId] = now;
+
+                userCooldowns[userId] = now + 30000; // Zet cooldown voor 30 seconden
 
                 grid[`${data.x},${data.y}`] = data.color;
 

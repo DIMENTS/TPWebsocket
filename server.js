@@ -13,17 +13,18 @@ wss.on('connection', (ws) => {
 
     ws.send(JSON.stringify({ type: 'init', grid }));
 
-    ws.on('message', (message) => {
+        ws.on('message', (message) => {
         try {
-            const data = JSON.parse(message);
+          const data = JSON.parse(message);
 
-            if (data.type === 'mouse_move') {
-                wss.clients.forEach((client) => {
-                    if (client !== ws && client.readyState === WebSocket.OPEN) {
-                        client.send(JSON.stringify(data));
-                    }
+          if (data.type === 'mouse_move') {
+            // Stuur de data (inclusief de percentages x en y) naar alle *andere* clients
+            wss.clients.forEach((client) => {
+              if (client !== ws && client.readyState === WebSocket.OPEN) {
+                client.send(JSON.stringify(data));
+              }
                 });
-            } else if (data.type === 'place_pixel') {
+                  } else if (data.type === 'place_pixel') {
                 const now = Date.now();
                 const userId = data.userId;
 
